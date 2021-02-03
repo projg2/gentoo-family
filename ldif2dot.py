@@ -3,6 +3,9 @@
 import argparse
 
 
+MULTIVALUED_FIELDS = ['gentooJoin', 'gentooRetire', 'gentooMentor', 'uid']
+
+
 def main():
     argp = argparse.ArgumentParser()
     argp.add_argument('input',
@@ -13,26 +16,65 @@ def main():
     print('digraph "gentoo-family" {')
     print('  rankdir=LR;');
 
-    devstates = {}
+    devinfos = {}
     devs = set()
 
     for block in args.input.read().split('\n\n'):
         if not block:
             continue
-        data = dict(l.split(': ', 1) for l in block.split('\n'))
-        if 'uid' not in data:
+        data = {}
+        for l in block.split('\n'):
+            k, v = l.split(': ', 1)
+            if k in MULTIVALUED_FIELDS:
+                data.setdefault(k, []).append(v)
+            elif k in data:
+                raise ValueError(f'Unexpected second value: {l} (uid={data["uid"]})')
+            else:
+                data[k] = v
+
+        if len(data.get('uid', [])) != 1:
             continue
-        devstates[data['uid']] = data['gentooStatus']
-        mentors = [m.strip() for m in data.get('gentooMentor', '').split(',')
-                   if m]
-        for m in mentors:
-            print(f'  "{m}" -> "{data["uid"]}";')
-            devs.add(m)
-            devs.add(data['uid'])
+        uid = data['uid'][0]
+        devinfos[uid] = data
+        for ml in data.get('gentooMentor', []):
+            for m in ml.split(','):
+                m = m.strip()
+                if m:
+                    print(f'  "{m}" -> "{uid}";')
+                    devs.add(m)
+                    devs.add(uid)
 
     for d in devs:
-        if devstates[d] == 'retired':
-            print(f'  "{d}" [color="red"];')
+        years = sorted(
+            (dt.split('/'), tp)
+            for tp in ('gentooJoin', 'gentooRetire')
+            for dt in devinfos[d].get(tp, []))
+
+        periods = []
+        prev = {}
+        for yr, tp in years:
+            if tp in prev:
+                periods.append(prev)
+                prev = {}
+            prev[tp] = yr
+        if prev:
+            periods.append(prev)
+
+        labels = []
+        for p in periods:
+            labels.append('-'.join([p.get(x, ['?'])[0] for x
+                                    in ('gentooJoin', 'gentooRetire')]))
+
+        retired = devinfos[d]['gentooStatus'] == 'retired'
+        attrs = []
+        if labels:
+            if not retired:
+                labels[-1] = labels[-1].rstrip('?')
+            attrs.append(f'label="\\N\\n({", ".join(labels)})"')
+        if retired:
+            attrs.append('color="red"')
+        if attrs:
+            print(f'  "{d}" [{", ".join(attrs)}];')
 
     print('}')
 

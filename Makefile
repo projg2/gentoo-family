@@ -1,3 +1,5 @@
+LDAP_FIELDS = uid gentooMentor gentooStatus gentooJoin gentooRetire
+
 all: gentoo-family.svg
 clean:
 	rm -f gentoo-family.svg gentoo-family.dot devs.ldif
@@ -14,7 +16,7 @@ gentoo-family.dot: devs.ldif
 
 devs.ldif:
 	rm -f $@.tmp $@
-	ssh dev.gentoo.org "ldapsearch -x -Z uid gentooMentor gentooStatus -LLL" > $@.tmp
+	ssh dev.gentoo.org "ldapsearch -x -Z $(LDAP_FIELDS) -LLL" > $@.tmp
 	mv $@.tmp $@
 
 .PHONY: all clean
