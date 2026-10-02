@@ -79,7 +79,7 @@ def main():
             attrs = []
             if retired:
                 attrs.append('color="red"')
-            name = f"{d}\\n{label}"
+            name = f"{d}\\n({label})"
             print(f'  "{name}" [{", ".join(attrs)}];')
             dev_nodes.setdefault(d, {})[name] = p
 
