@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 
 import argparse
+import sys
 
 
 MULTIVALUED_FIELDS = ['gentooJoin', 'gentooRetire', 'gentooMentor', 'uid']
@@ -71,8 +72,10 @@ def main():
             periods = [{}]
         name = None
         for p in periods:
-            label = '-'.join([p.get(x, ['?'])[0] for x
-                                    in ('gentooJoin', 'gentooRetire')])
+            join, retire = (
+                p.get(x, ['?']) for x in ('gentooJoin', 'gentooRetire')
+            )
+            label = '-'.join((join[0], retire[0]))
             if not retired:
                 label = label.rstrip('?')
 
@@ -81,7 +84,7 @@ def main():
                 attrs.append('color="red"')
             name = f"{d}\\n({label})"
             print(f'  "{name}" [{", ".join(attrs)}];')
-            dev_nodes.setdefault(d, {})[name] = p
+            dev_nodes.setdefault(d, {})[name] = (join, retire)
 
     # Output edges connecting rejoining developers.
     for dev_node, period_dict in dev_nodes.items():
@@ -91,10 +94,27 @@ def main():
 
     # Output edges connecting mentors to mentees.
     for mentor, mentees in relations.items():
-        # TODO: find the right node chronologically
-        mentor_node = next(iter(dev_nodes[mentor]))
         for mentee in mentees:
-            mentee_node = next(iter(dev_nodes[mentee]))
+            # TODO: find the right node chronologically
+            mentor_iter = iter(dev_nodes[mentor].items())
+            mentee_iter = iter(dev_nodes[mentee].items())
+            mentor_node, (mentor_join, mentor_retire) = next(mentor_iter)
+            mentee_node, (mentee_join, mentee_retire) = next(mentee_iter)
+            # mentee should be recruited while the mentor was a dev
+            while True:
+                try:
+                    # if mentee joined earlier, look for a later rejoin
+                    if mentor_join > mentee_join:
+                        mentee_node, (mentee_join, mentee_retire) = next(mentee_iter)
+                    # if mentee joined after mentor retired, see if they returned first
+                    elif mentee_join > mentor_retire:
+                        mentor_node, (mentor_join, mentor_retire) = next(mentor_iter)
+                    else:
+                        break
+                except StopIteration:
+                    print(f"Unable to match {mentor} -> {mentee}",
+                          file=sys.stderr)
+                    break
             print(f'  "{mentor_node}" -> "{mentee_node}";')
 
     print('}')
