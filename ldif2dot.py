@@ -18,7 +18,9 @@ def main():
 
     devinfos = {}
     devs = set()
+    relations = {}
 
+    # Parse LDIF and collect mentor->dev relations.
     for block in args.input.read().split('\n\n'):
         if not block:
             continue
@@ -40,15 +42,20 @@ def main():
             for m in ml.split(','):
                 m = m.strip()
                 if m:
-                    print(f'  "{m}" -> "{uid}";')
+                    relations.setdefault(m, []).append(uid)
                     devs.add(m)
                     devs.add(uid)
 
+    # Split all collected developers (mentors and mentees) into periods.
+    # Output all developer nodes.
+    dev_nodes = {}
     for d in devs:
+        devinfo = devinfos[d]
+        retired = devinfo['gentooStatus'] == 'retired'
         years = sorted(
             (dt.split('/'), tp)
             for tp in ('gentooJoin', 'gentooRetire')
-            for dt in devinfos[d].get(tp, []))
+            for dt in devinfo.get(tp, []))
 
         periods = []
         prev = {}
@@ -60,21 +67,35 @@ def main():
         if prev:
             periods.append(prev)
 
-        labels = []
+        if not periods:
+            periods = [{}]
+        name = None
         for p in periods:
-            labels.append('-'.join([p.get(x, ['?'])[0] for x
-                                    in ('gentooJoin', 'gentooRetire')]))
-
-        retired = devinfos[d]['gentooStatus'] == 'retired'
-        attrs = []
-        if labels:
+            label = '-'.join([p.get(x, ['?'])[0] for x
+                                    in ('gentooJoin', 'gentooRetire')])
             if not retired:
-                labels[-1] = labels[-1].rstrip('?')
-            attrs.append(f'label="\\N\\n({", ".join(labels)})"')
-        if retired:
-            attrs.append('color="red"')
-        if attrs:
-            print(f'  "{d}" [{", ".join(attrs)}];')
+                label = label.rstrip('?')
+
+            attrs = []
+            if retired:
+                attrs.append('color="red"')
+            name = f"{d}\\n{label}"
+            print(f'  "{name}" [{", ".join(attrs)}];')
+            dev_nodes.setdefault(d, {})[name] = p
+
+    # Output edges connecting rejoining developers.
+    for dev_node, period_dict in dev_nodes.items():
+        if len(period_dict) > 1:
+            edges = ' -> '.join(f'"{x}"' for x in period_dict)
+            print(f"  {edges} [style=dashed];")
+
+    # Output edges connecting mentors to mentees.
+    for mentor, mentees in relations.items():
+        # TODO: find the right node chronologically
+        mentor_node = next(iter(dev_nodes[mentor]))
+        for mentee in mentees:
+            mentee_node = next(iter(dev_nodes[mentee]))
+            print(f'  "{mentor_node}" -> "{mentee_node}";')
 
     print('}')
 

@@ -9,7 +9,7 @@ clean:
 	dot -Tsvg $< > $@.tmp
 	mv $@.tmp $@
 
-gentoo-family.dot: devs.ldif
+gentoo-family.dot: devs.ldif ldif2dot.py
 	rm -f $@.tmp $@
 	./ldif2dot.py $< > $@.tmp
 	mv $@.tmp $@
