@@ -61,7 +61,7 @@ def main():
         periods = []
         prev = {}
         for yr, tp in years:
-            if tp in prev:
+            if tp in prev or yr > prev.get("gentooRetire", ["9999", "0", "0"]):
                 periods.append(prev)
                 prev = {}
             prev[tp] = yr
